@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 // import { CreateFilmDto } from './dto/create-film.dto';
 // import { UpdateFilmDto } from './dto/update-film.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -9,6 +9,18 @@ import { ForbiddenException } from '@nestjs/common';
 @Injectable()
 export class FilmsService {
   constructor(private prisma: PrismaService) {}
+
+  async findUserFilms(id: string) {
+    const films = await this.prisma.user.findMany({
+      where: {
+        id: id,
+      },
+      select: {
+        favoriteFilms: true,
+      },
+    });
+    return films;
+  }
 
   async create(createFilmDto: FilmDto) {
     try {
@@ -51,21 +63,30 @@ export class FilmsService {
   }
 
   async findOne(id: string) {
-    const films = await this.prisma.film.findUnique({
-      where: {
-        id: id,
-      },
-      include: {
-        User: {
-          select: {
-            id: true,
-            name: true,
+    try {
+      const films = await this.prisma.film.findUnique({
+        where: {
+          id: id,
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return films;
+      return films;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        //Film already exists
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Film not found');
+        }
+      }
+    }
   }
 
   async update(id: string, updateFilmDto: FilmDto) {
@@ -97,8 +118,8 @@ export class FilmsService {
     }
   }
 
-  remove(id: string) {
-    const film = this.prisma.film.delete({
+  async remove(id: string) {
+    const film = await this.prisma.film.delete({
       where: {
         id: id,
       },
