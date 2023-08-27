@@ -71,29 +71,38 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const users = await this.prismaService.user.findUnique({
-      where: {
-        id: id,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        favoriteFilms: true,
-      },
-    });
-    if (!users) {
-      throw new NotFoundException('User not found');
+    try {
+      const users = await this.prismaService.user.findUniqueOrThrow({
+        where: {
+          id: id,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          favoriteFilms: true,
+        },
+      });
+      return users;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('User not found');
+        }
+      }
     }
-    return users;
   }
 
   async update(id: string, updateUserDto: UserDto) {
     try {
+      await this.prismaService.user.findUniqueOrThrow({
+        where: {
+          id: id,
+        },
+      });
+
       const hashedPassword = await argon2.hash(updateUserDto.password);
-      console.log(id);
-      console.log(updateUserDto);
       const user = await this.prismaService.user.update({
         where: {
           id: id,
@@ -105,10 +114,6 @@ export class UsersService {
           role: updateUserDto.role,
         },
       });
-      console.log('user', user);
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
       return user;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {

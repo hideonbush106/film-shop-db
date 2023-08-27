@@ -8,10 +8,10 @@ import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class FilmsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prismaService: PrismaService) {}
 
   async findUserFilms(id: string) {
-    const films = await this.prisma.user.findMany({
+    const films = await this.prismaService.user.findUnique({
       where: {
         id: id,
       },
@@ -24,7 +24,7 @@ export class FilmsService {
 
   async create(createFilmDto: FilmDto) {
     try {
-      const film = await this.prisma.film.create({
+      const film = await this.prismaService.film.create({
         data: {
           title: createFilmDto.title,
           director: createFilmDto.director,
@@ -49,14 +49,9 @@ export class FilmsService {
   }
 
   async findAll() {
-    const films = await this.prisma.film.findMany({
+    const films = await this.prismaService.film.findMany({
       include: {
-        User: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        User: false,
       },
     });
     return films;
@@ -64,24 +59,18 @@ export class FilmsService {
 
   async findOne(id: string) {
     try {
-      const films = await this.prisma.film.findUnique({
+      const films = await this.prismaService.film.findUniqueOrThrow({
         where: {
           id: id,
         },
         include: {
-          User: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          User: false,
         },
       });
 
       return films;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        //Film already exists
         if (error.code === 'P2025') {
           throw new NotFoundException('Film not found');
         }
@@ -91,7 +80,13 @@ export class FilmsService {
 
   async update(id: string, updateFilmDto: FilmDto) {
     try {
-      const film = await this.prisma.film.update({
+      await this.prismaService.film.findUniqueOrThrow({
+        where: {
+          id: id,
+        },
+      });
+
+      const film = await this.prismaService.film.update({
         where: {
           id: id,
         },
@@ -110,20 +105,111 @@ export class FilmsService {
       return film;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        //Film already exists
         if (error.code === 'P2002') {
           throw new ForbiddenException('Film already exists');
+        }
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Film not found');
         }
       }
     }
   }
 
   async remove(id: string) {
-    const film = await this.prisma.film.delete({
+    try {
+      await this.prismaService.film.delete({
+        where: {
+          id: id,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Film not found');
+        }
+      }
+    }
+  }
+
+  async addToFavorites(userId: string, filmId: string) {
+    const isFilmExist = await this.prismaService.user.findUnique({
       where: {
-        id: id,
+        id: userId,
+      },
+      select: {
+        favoriteFilms: {
+          where: {
+            id: filmId,
+          },
+        },
       },
     });
-    return film;
+    if (isFilmExist?.favoriteFilms.length !== 0) {
+      throw new ForbiddenException('Film already in favorites');
+    }
+    try {
+      await this.prismaService.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          favoriteFilms: {
+            connect: {
+              id: filmId,
+            },
+          },
+        },
+      });
+      return {
+        message: 'Film added to favorites',
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Film not found');
+        }
+      }
+    }
+  }
+
+  async removeFromFavorites(userId: string, filmId: string) {
+    const isFilmExist = await this.prismaService.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        favoriteFilms: {
+          where: {
+            id: filmId,
+          },
+        },
+      },
+    });
+    if (isFilmExist?.favoriteFilms.length === 0) {
+      throw new ForbiddenException('Film not in favorites');
+    }
+    try {
+      await this.prismaService.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          favoriteFilms: {
+            disconnect: {
+              id: filmId,
+            },
+          },
+        },
+      });
+      return {
+        message: 'Film removed from favorites',
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Film not found');
+        }
+      }
+    }
   }
 }

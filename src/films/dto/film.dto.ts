@@ -1,8 +1,9 @@
 import { Genre } from '@prisma/client';
 import {
+  IsArray,
   IsDateString,
-  IsDecimal,
   IsNotEmpty,
+  IsNumber,
   IsString,
   IsUrl,
 } from 'class-validator';
@@ -20,12 +21,12 @@ export class FilmDto {
   director: string;
 
   @ApiProperty()
-  @IsString()
+  @IsArray()
   @IsNotEmpty()
   nation: string[];
 
   @ApiProperty({ enum: Genre })
-  @IsString()
+  @IsArray()
   @IsNotEmpty()
   genre: Genre[];
 
@@ -40,7 +41,7 @@ export class FilmDto {
   releaseDate: Date;
 
   @ApiProperty()
-  @IsDecimal()
+  @IsNumber()
   @IsNotEmpty()
   rating: number;
 
